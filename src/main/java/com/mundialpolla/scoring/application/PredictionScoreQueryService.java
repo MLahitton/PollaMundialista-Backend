@@ -28,6 +28,12 @@ public class PredictionScoreQueryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prediction score not found"));
     }
 
+    public PredictionScoreResponse findByPredictionIdAndParticipantId(UUID predictionId, UUID participantId) {
+        return predictionScoreRepository.findByPredictionIdAndParticipantId(predictionId, participantId)
+                .map(this::toResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Prediction score not found"));
+    }
+
     public List<PredictionScoreResponse> findByParticipantId(UUID participantId) {
         return map(predictionScoreRepository.findByParticipantIdOrderByMatchStartsAtAsc(participantId));
     }

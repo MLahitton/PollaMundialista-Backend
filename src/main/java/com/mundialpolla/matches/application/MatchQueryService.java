@@ -19,15 +19,22 @@ public class MatchQueryService {
 
     private final MatchRepository matchRepository;
     private final ApplicationClock applicationClock;
+    private final MatchViewStateResolver matchViewStateResolver;
 
-    public MatchQueryService(MatchRepository matchRepository, ApplicationClock applicationClock) {
+    public MatchQueryService(
+            MatchRepository matchRepository,
+            ApplicationClock applicationClock,
+            MatchViewStateResolver matchViewStateResolver
+    ) {
         this.matchRepository = matchRepository;
         this.applicationClock = applicationClock;
+        this.matchViewStateResolver = matchViewStateResolver;
     }
 
     public MatchResponse findById(UUID id) {
+        Instant now = applicationClock.now();
         return matchRepository.findById(id)
-                .map(this::toResponse)
+                .map(match -> toResponse(match, now))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Match not found"));
     }
 
@@ -56,21 +63,37 @@ public class MatchQueryService {
     }
 
     public List<MatchResponse> findUpcoming(UUID tournamentId) {
+        Instant now = applicationClock.now();
         return map(matchRepository.findByTournamentIdAndStartsAtAfterOrderByStartsAtAsc(
                 tournamentId,
-                applicationClock.now()
-        ));
+                now
+        ), now);
     }
 
     private List<MatchResponse> map(List<Match> matches) {
+        Instant now = applicationClock.now();
+        return map(matches, now);
+    }
+
+    private List<MatchResponse> map(List<Match> matches, Instant now) {
         return matches.stream()
-                .map(this::toResponse)
+                .map(match -> toResponse(match, now))
                 .toList();
     }
 
-    private MatchResponse toResponse(Match match) {
-        Instant now = applicationClock.now();
-        boolean hideResult = now.isBefore(match.getStartsAt());
+    private MatchResponse toResponse(Match match, Instant now) {
+        MatchViewState viewState = matchViewStateResolver.resolve(match, now);
+        boolean showResult = viewState.resultVisible();
+        Instant visibleResultConfirmedAt = showResult
+                && match.getResultConfirmedAt() != null
+                && !match.getResultConfirmedAt().isAfter(now)
+                ? match.getResultConfirmedAt()
+                : null;
+        Instant visibleScoredAt = showResult
+                && match.getScoredAt() != null
+                && !match.getScoredAt().isAfter(now)
+                ? match.getScoredAt()
+                : null;
 
         return new MatchResponse(
                 match.getId(),
@@ -88,14 +111,17 @@ public class MatchQueryService {
                 match.getAwayTeam().getLogoUrl(),
                 match.getStartsAt(),
                 match.getPredictionClosesAt(),
-                match.getStatus(),
-                hideResult ? null : match.getHomeScore(),
-                hideResult ? null : match.getAwayScore(),
-                hideResult ? null : match.getHomePenaltyScore(),
-                hideResult ? null : match.getAwayPenaltyScore(),
-                hideResult || match.getQualifiedTeam() == null ? null : match.getQualifiedTeam().getId(),
-                hideResult ? null : match.getResultConfirmedAt(),
-                hideResult ? null : match.getScoredAt()
+                viewState.status(),
+                viewState.predictionsOpen(),
+                viewState.predictionsClosed(),
+                viewState.resultVisible(),
+                showResult ? match.getHomeScore() : null,
+                showResult ? match.getAwayScore() : null,
+                showResult ? match.getHomePenaltyScore() : null,
+                showResult ? match.getAwayPenaltyScore() : null,
+                showResult && match.getQualifiedTeam() != null ? match.getQualifiedTeam().getId() : null,
+                visibleResultConfirmedAt,
+                visibleScoredAt
         );
     }
 }

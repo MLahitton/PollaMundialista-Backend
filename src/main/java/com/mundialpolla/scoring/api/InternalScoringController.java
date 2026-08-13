@@ -1,5 +1,7 @@
 package com.mundialpolla.scoring.api;
 
+import com.mundialpolla.scoring.application.AutomaticScoringRunResult;
+import com.mundialpolla.scoring.application.AutomaticScoringService;
 import com.mundialpolla.scoring.application.MatchScoringService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -16,9 +18,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalScoringController {
 
     private final MatchScoringService matchScoringService;
+    private final AutomaticScoringService automaticScoringService;
 
-    public InternalScoringController(MatchScoringService matchScoringService) {
+    public InternalScoringController(
+            MatchScoringService matchScoringService,
+            AutomaticScoringService automaticScoringService
+    ) {
         this.matchScoringService = matchScoringService;
+        this.automaticScoringService = automaticScoringService;
     }
 
     @PostMapping("/matches/{matchId}")
@@ -28,5 +35,18 @@ public class InternalScoringController {
     @ApiResponse(responseCode = "409", description = "Match cannot be scored yet")
     public MatchScoringResultResponse scoreMatch(@PathVariable UUID matchId) {
         return matchScoringService.scoreMatch(matchId);
+    }
+
+    @PostMapping("/run")
+    @Operation(summary = "Run automatic scoring cycle")
+    @ApiResponse(responseCode = "200", description = "Automatic scoring cycle completed")
+    public AutomaticScoringRunResponse runAutomaticScoring() {
+        AutomaticScoringRunResult result = automaticScoringService.runOnce();
+        return new AutomaticScoringRunResponse(
+                result.asOf(),
+                result.candidates(),
+                result.processed(),
+                result.failed()
+        );
     }
 }

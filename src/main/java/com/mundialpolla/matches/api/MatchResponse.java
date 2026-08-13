@@ -1,6 +1,6 @@
 package com.mundialpolla.matches.api;
 
-import com.mundialpolla.matches.domain.MatchStatus;
+import com.mundialpolla.matches.application.MatchViewStatus;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -20,7 +20,10 @@ public record MatchResponse(
         String awayTeamLogoUrl,
         Instant startsAt,
         Instant predictionClosesAt,
-        MatchStatus status,
+        MatchViewStatus status,
+        boolean predictionsOpen,
+        boolean predictionsClosed,
+        boolean resultVisible,
         Integer homeScore,
         Integer awayScore,
         Integer homePenaltyScore,

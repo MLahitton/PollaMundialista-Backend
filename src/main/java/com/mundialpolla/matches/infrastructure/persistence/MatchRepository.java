@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface MatchRepository extends JpaRepository<Match, UUID> {
 
@@ -27,4 +29,15 @@ public interface MatchRepository extends JpaRepository<Match, UUID> {
     List<Match> findByStartsAtBetweenOrderByStartsAtAsc(Instant from, Instant to);
 
     List<Match> findByTournamentIdAndStartsAtAfterOrderByStartsAtAsc(UUID tournamentId, Instant now);
+
+    @Query("""
+            select match
+            from Match match
+            where match.resultConfirmedAt is not null
+              and match.resultConfirmedAt <= :now
+              and match.startsAt <= :now
+              and match.scoredAt is null
+            order by match.startsAt asc
+            """)
+    List<Match> findAutomaticScoringCandidates(@Param("now") Instant now);
 }

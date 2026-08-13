@@ -28,7 +28,7 @@ public class MatchController {
     }
 
     @GetMapping
-    @Operation(summary = "List matches by filter")
+    @Operation(summary = "List matches by filter. The status filter uses persisted match status; response status is projected.")
     @ApiResponse(responseCode = "200", description = "Matches found")
     @ApiResponse(responseCode = "400", description = "Invalid filter")
     public List<MatchResponse> findMatches(
