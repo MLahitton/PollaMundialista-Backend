@@ -1,4 +1,4 @@
-Polla Mundialista 2026 — Backend
+# Polla Mundialista 2026 — Backend
 
 Guía de instalación, configuración y ejecución local desde un computador limpio.
 
@@ -554,6 +554,179 @@ Swagger abre correctamente.
 Dataset importado.
 
 Frontend puede realizar Google Login.
+Variables de entorno: cuáles son compartidas y cuáles son locales
+
+Para ejecutar el Backend, cada desarrollador debe configurar las siguientes variables de entorno.
+
+No todas las variables deben compartirse entre integrantes del equipo.
+
+Variables locales de cada desarrollador
+
+Estas variables dependen del computador de cada persona y no deben compartirse.
+
+DB_URL=jdbc:postgresql://localhost:5432/polla_mundialista
+DB_USERNAME=postgres
+DB_PASSWORD=TU_PASSWORD_LOCAL_DE_POSTGRES
+
+JWT_SECRET=TU_SECRET_BASE64_LOCAL
+
+DB_URL
+
+Por defecto, el proyecto trabaja con:
+
+polla_mundialista
+
+La conexión local esperada es:
+
+DB_URL=jdbc:postgresql://localhost:5432/polla_mundialista
+
+Cada desarrollador debe crear esa base de datos en su propio PostgreSQL local.
+
+La base:
+
+polla_mundialista_test
+
+se reserva para escenarios de prueba aislados y solo se utiliza si DB_URL se cambia explícitamente para apuntar a ella.
+
+DB_USERNAME
+
+En desarrollo local se utiliza normalmente:
+
+DB_USERNAME=postgres
+
+Si algún integrante configuró PostgreSQL con otro usuario, debe reemplazar este valor por el suyo.
+
+DB_PASSWORD
+
+Cada integrante debe usar la contraseña que configuró al instalar PostgreSQL en su computador.
+
+Ejemplo:
+
+DB_PASSWORD=TU_PASSWORD_LOCAL
+
+No pedir ni reutilizar la contraseña de PostgreSQL de otro integrante.
+
+JWT_SECRET
+
+Cada desarrollador puede generar su propio secret local.
+
+No es necesario que todos tengan el mismo valor durante desarrollo local.
+
+Debe ser un valor Base64 suficientemente largo.
+
+En PowerShell puede generarse así:
+
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+[Convert]::ToBase64String($bytes)
+
+Luego asignarlo:
+
+$env:JWT_SECRET = "VALOR_GENERADO"
+
+No compartir este valor públicamente ni subirlo a GitHub.
+
+Variable compartida por el proyecto
+
+La siguiente variable sí debe ser proporcionada por el responsable del proyecto:
+
+GOOGLE_CLIENT_ID=CLIENT_ID_DEL_PROYECTO
+
+Todos los desarrolladores deben utilizar el mismo GOOGLE_CLIENT_ID configurado para Polla Mundialista 2026.
+
+El GOOGLE_CLIENT_ID no es una contraseña, pero debe mantenerse centralizado para evitar que cada integrante configure un cliente OAuth diferente.
+
+Configuración recomendada para desarrollo
+
+Durante desarrollo y pruebas históricas utilizar:
+
+AUTO_SCORING_ENABLED=false
+
+Esto evita que el scheduler procese automáticamente partidos históricos al iniciar el Backend.
+
+El scoring puede ejecutarse manualmente cuando sea necesario mediante:
+
+POST /api/v1/internal/scoring/run
+
+CORS local
+
+Para trabajar con el Frontend local:
+
+CORS_ALLOWED_ORIGINS=http://localhost:3000
+
+Configuración final esperada
+
+Cada desarrollador debería tener una configuración equivalente a:
+
+DB_URL=jdbc:postgresql://localhost:5432/polla_mundialista
+DB_USERNAME=postgres
+DB_PASSWORD=TU_PASSWORD_LOCAL
+
+GOOGLE_CLIENT_ID=CLIENT_ID_COMPARTIDO_DEL_PROYECTO
+
+JWT_SECRET=TU_SECRET_BASE64_LOCAL
+
+AUTO_SCORING_ENABLED=false
+
+CORS_ALLOWED_ORIGINS=http://localhost:3000
+
+Resumen
+
+Variable
+
+¿Se comparte?
+
+Responsable
+
+DB_URL
+
+No necesariamente
+
+Cada desarrollador
+
+DB_USERNAME
+
+No necesariamente
+
+Cada desarrollador
+
+DB_PASSWORD
+
+No
+
+Cada desarrollador
+
+JWT_SECRET
+
+No
+
+Cada desarrollador
+
+GOOGLE_CLIENT_ID
+
+Sí
+
+Responsable del proyecto
+
+AUTO_SCORING_ENABLED
+
+Valor recomendado común
+
+Equipo
+
+CORS_ALLOWED_ORIGINS
+
+Valor recomendado común
+
+Equipo
+
+Nunca subir a GitHub:
+
+DB_PASSWORD
+JWT_SECRET
+Google Client Secret
+JWT emitidos
+Google ID Tokens
 
 Fuentes oficiales de instalación
 
