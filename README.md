@@ -151,89 +151,118 @@ Cuando el backend arranca, Flyway aplica las migraciones automáticamente.
 
 4. Variables de entorno del backend
 
-El repositorio no contiene contraseñas ni secretos reales. Cada desarrollador debe configurar sus variables localmente.
+El repositorio no contiene contraseñas ni secretos reales. Cada desarrollador configura los suyos
+UNA SOLA VEZ en un archivo `.env` en la raíz del backend.
 
-Abre PowerShell en la carpeta del backend.
+`.env` está ignorado por Git y lo carga automáticamente `application.properties` mediante:
 
-4.1 PostgreSQL
+spring.config.import=optional:file:./.env[.properties]
 
-$env:DB_PASSWORD = "TU_PASSWORD_LOCAL_DE_POSTGRES"
+Esto significa que NO tienes que exportar variables cada vez que abres una terminal.
+Configuras el `.env` una vez y a partir de ahí basta con:
 
-Opcionalmente, el proyecto admite:
+.\mvnw.cmd spring-boot:run
 
-$env:DB_USERNAME = "postgres"
-$env:DB_URL = "jdbc:postgresql://localhost:5432/polla_mundialista"
+4.1 Crear tu .env
 
+Copia la plantilla versionada y complétala:
+
+Copy-Item .env.example .env
+
+`.env.example` documenta cada variable. Nunca escribas valores reales en `.env.example`.
+
+4.2 PostgreSQL
+
+En tu `.env`:
+
+DB_PASSWORD=tu_password_local_de_postgres
+
+Opcionalmente, el proyecto admite `DB_USERNAME` y `DB_URL`.
 Si no los defines, se usan los valores locales por defecto del proyecto.
 
-4.2 Google Client ID
+4.3 Google Client ID
 
 Solicita al responsable del proyecto el Google OAuth Web Client ID usado por la Polla Mundialista.
 
-Configúralo:
+En tu `.env`:
 
-$env:GOOGLE_CLIENT_ID = "TU_CLIENT_ID.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID=tu_client_id.apps.googleusercontent.com
 
-El Client ID no es el Client Secret. Nunca necesitas un Google Client Secret para ejecutar este flujo local.
+El Client ID es público: viaja al navegador y no es un secreto.
+El mismo valor debe usarse en el frontend como `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
 
-El mismo Client ID deberá utilizarse en el frontend.
+IMPORTANTE: el Client ID NO es el Client Secret. Este proyecto nunca necesita el
+Google Client Secret; no lo pongas en ninguna variable, ni aquí ni en el frontend.
 
-4.3 JWT Secret local
+4.4 JWT Secret local
 
-Cada desarrollador puede generar su propio secreto JWT local. No es necesario compartirlo entre computadores.
+`JWT_SECRET` es el secreto INTERNO con el que este backend firma sus propios JWT,
+los que emite después de validar el Google ID Token. No tiene ninguna relación con Google:
+no es el Client ID ni el Client Secret.
 
-Ejecuta:
+Requisito exigido por `AppJwtConfig`: Base64 estándar de al menos 32 bytes.
+Pegar ahí un Client Secret de Google (formato `GOCSPX-...`) falla con
+`Illegal base64 character 2d`, porque el guion no pertenece al alfabeto Base64.
 
-$bytes = New-Object byte[] 32
-$rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::Create()
+Genera el tuyo y añádelo al `.env` sin imprimirlo en pantalla:
+
+$bytes = New-Object byte[] 48
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 $rng.GetBytes($bytes)
-$env:JWT_SECRET = [Convert]::ToBase64String($bytes)
+"JWT_SECRET=" + [Convert]::ToBase64String($bytes) | Out-File -Append -Encoding ascii .env
 $rng.Dispose()
 
-Verifica únicamente la longitud, sin imprimir ni compartir el secreto:
-
-$env:JWT_SECRET.Length
-
-Para un secreto de 32 bytes en Base64 normalmente debe mostrar:
-
-44
+Debe permanecer ESTABLE entre reinicios. Si lo cambias, todas las sesiones abiertas
+dejan de ser válidas y el frontend empezará a recibir 401.
 
 No publiques JWT_SECRET en GitHub, chats, capturas ni documentación.
 
-4.4 Scoring automático durante desarrollo
+4.5 Scoring automático durante desarrollo
 
-Para desarrollo y reproducción histórica se recomienda desactivar el scheduler automático:
+Para desarrollo y reproducción histórica se recomienda desactivar el scheduler automático.
+En tu `.env`:
 
-$env:AUTO_SCORING_ENABLED = "false"
+AUTO_SCORING_ENABLED=false
 
 Esto evita que, al arrancar el backend en tiempo real, se procesen inmediatamente todos los partidos históricos.
 
 Cuando queramos probar el scheduler de forma explícita podremos activarlo temporalmente.
 
-4.5 CORS
+4.6 CORS
 
 El backend permite por defecto el frontend local:
 
 http://localhost:3000
 
-Si necesitas otro origen:
+Si necesitas otro origen, en tu `.env`:
 
-$env:CORS_ALLOWED_ORIGINS = "http://localhost:3000"
+CORS_ALLOWED_ORIGINS=http://localhost:3000
 
 Puede recibir varios orígenes separados por coma.
 
 5. Resumen de variables para desarrollo
 
-En una nueva terminal PowerShell, antes de arrancar el backend, configura al menos:
+Todo vive en el archivo `.env` de la raíz del backend, que configuras UNA VEZ:
 
-$env:DB_PASSWORD = "TU_PASSWORD_LOCAL_DE_POSTGRES"
-$env:GOOGLE_CLIENT_ID = "TU_CLIENT_ID.apps.googleusercontent.com"
-$env:JWT_SECRET = "TU_JWT_SECRET_BASE64"
-$env:AUTO_SCORING_ENABLED = "false"
+DB_PASSWORD=tu_password_local_de_postgres
+GOOGLE_CLIENT_ID=tu_client_id.apps.googleusercontent.com
+JWT_SECRET=tu_secreto_base64_de_32_bytes_o_mas
+AUTO_SCORING_ENABLED=false
 
-Estas variables existen solo en esa sesión de PowerShell. Si cierras la terminal, tendrás que configurarlas nuevamente.
+Este archivo persiste entre reinicios y entre terminales. No hay que exportar nada
+manualmente antes de arrancar, y `JWT_SECRET` se mantiene estable, de modo que las
+sesiones abiertas siguen siendo válidas después de reiniciar el backend.
 
-6. Primera instalación / descarga de dependencias
+`.env` está en `.gitignore`: nunca se sube al repositorio.
+
+Nota: si además defines alguna de estas variables como variable de entorno del sistema,
+esa tiene prioridad sobre el `.env`. Exportar un valor de ejemplo (por ejemplo
+`$env:GOOGLE_CLIENT_ID = "TU_CLIENT_ID..."`) hace que el backend use ese valor falso
+y que el login devuelva 401. Ante un 401 inesperado, comprueba primero:
+
+$env:GOOGLE_CLIENT_ID
+
+6. Primera instalación / compilación y pruebas
 
 No necesitas instalar Maven manualmente.
 
@@ -242,6 +271,18 @@ Desde la raíz del backend:
 .\mvnw.cmd clean test
 
 La primera ejecución descargará las dependencias Maven necesarias.
+
+IMPORTANTE: este comando no solo descarga dependencias. La prueba
+`MundialBackendApplicationTests` es un `@SpringBootTest` que levanta el
+contexto completo de Spring, así que antes de ejecutarlo necesitas:
+
+- PostgreSQL en ejecución;
+- la base `polla_mundialista` ya creada (sección 3);
+- tu `.env` configurado con DB_PASSWORD y JWT_SECRET (sección 4).
+
+Si lo lanzas antes de eso, fallará con un error de conexión o de configuración
+que no significa que el proyecto esté roto: significa que aún falta configurar
+el entorno.
 
 Resultado esperado al final:
 
@@ -381,6 +422,51 @@ POST /api/v1/internal/clock/real
 
 El reloj histórico es una herramienta de desarrollo/demo. Al reiniciar el backend vuelve a REAL.
 
+11.1 Scripts para simular el Mundial
+
+En lugar de escribir esas peticiones a mano, el repositorio incluye dos utilidades
+de desarrollo en `scripts/`. Solo llaman a los endpoints anteriores: no modifican
+código, ni base de datos, ni las fechas de los partidos.
+
+### Desarrollo normal
+
+El backend utiliza el reloj REAL con la hora actual. Ese es el comportamiento por
+defecto y no hay que hacer nada para obtenerlo: cada vez que arrancas el backend
+empieza en REAL, porque el modo del reloj vive solo en memoria.
+
+Con el reloj en REAL, `GET /api/v1/matches/upcoming` devuelve `[]` y el frontend
+muestra "No hay partidos próximos". **Eso es correcto**, no es un error: el dataset
+del Mundial 2026 va del 11 de junio al 19 de julio de 2026, fechas que ya pasaron
+respecto a la fecha actual, así que no queda ningún partido "próximo".
+
+### Probar el Mundial
+
+Con el backend ya arrancado, desde la raíz del backend:
+
+.\scripts\simular-mundial.ps1
+
+El script comprueba que el backend responda, activa HISTORICAL_REPLAY en
+`2026-06-10T12:00:00Z` (un día antes del primer partido) y muestra el modo del
+reloj, la fecha simulada, el torneo, la cantidad de partidos próximos y el primero
+de ellos con su ventana de pronóstico. Si algo no cuadra, imprime un diagnóstico
+y no cambia nada más.
+
+Admite otro instante si quieres situarte en mitad del torneo:
+
+.\scripts\simular-mundial.ps1 -Instant "2026-06-25T12:00:00Z"
+
+Recuerda que al reiniciar el backend el reloj vuelve a REAL y habrá que volver a
+ejecutar el script. Es intencional: HISTORICAL_REPLAY es únicamente una
+herramienta de simulación para poder probar el dataset del Mundial 2026, nunca el
+modo de trabajo por defecto.
+
+### Volver al tiempo real
+
+.\scripts\restaurar-tiempo-real.ps1
+
+Confirma que el modo vuelve a REAL y muestra la hora actual. Reiniciar el backend
+consigue exactamente lo mismo.
+
 12. Scoring en desarrollo
 
 Con AUTO_SCORING_ENABLED=false, puedes disparar manualmente un ciclo de scoring:
@@ -424,12 +510,9 @@ Variables de entorno cargadas.
 
 git pull
 
-$env:DB_PASSWORD = "TU_PASSWORD_LOCAL"
-$env:GOOGLE_CLIENT_ID = "TU_CLIENT_ID.apps.googleusercontent.com"
-$env:JWT_SECRET = "TU_JWT_SECRET_BASE64"
-$env:AUTO_SCORING_ENABLED = "false"
-
 .\mvnw.cmd spring-boot:run
+
+Eso es todo: la configuración vive en `.env` y no hay que exportar nada.
 
 Después abre Swagger o levanta el frontend.
 
@@ -447,9 +530,10 @@ Java 21 debe aparecer primero en PATH.
 
 DB_PASSWORD no existe
 
-Configúrala en la misma terminal antes de ejecutar Maven:
+Revisa que tu archivo `.env` exista en la raíz del backend y contenga
+`DB_PASSWORD` con tu contraseña de PostgreSQL. Si aún no lo has creado:
 
-$env:DB_PASSWORD = "..."
+Copy-Item .env.example .env
 
 Error de conexión PostgreSQL
 
@@ -485,11 +569,19 @@ no se esté usando Client Secret en lugar de Client ID.
 
 Al arrancar se puntúan muchos partidos
 
-Detén el backend y asegúrate de definir:
+Detén el backend y asegúrate de que tu `.env` contenga:
 
-$env:AUTO_SCORING_ENABLED = "false"
+AUTO_SCORING_ENABLED=false
 
 antes de volver a iniciar.
+
+No aparecen partidos / "No hay partidos próximos"
+
+Es lo esperado con el reloj en REAL: el dataset del Mundial 2026 va del
+11 de junio al 19 de julio de 2026, fechas ya pasadas, así que no queda
+ningún partido "próximo". Para verlos, ejecuta el simulador (sección 11.1):
+
+.\scripts\simular-mundial.ps1
 
 16. Archivos que nunca deben subirse al repositorio
 
@@ -608,21 +700,15 @@ No pedir ni reutilizar la contraseña de PostgreSQL de otro integrante.
 
 JWT_SECRET
 
-Cada desarrollador puede generar su propio secret local.
+Cada desarrollador genera su propio secreto local en su `.env`.
 
 No es necesario que todos tengan el mismo valor durante desarrollo local.
 
-Debe ser un valor Base64 suficientemente largo.
+Es el secreto INTERNO con el que el backend firma sus propios JWT. No tiene
+relación con Google: no es el Client ID ni el Client Secret.
 
-En PowerShell puede generarse así:
-
-$bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-[Convert]::ToBase64String($bytes)
-
-Luego asignarlo:
-
-$env:JWT_SECRET = "VALOR_GENERADO"
+Requisito: Base64 estándar de al menos 32 bytes (ver sección 4.4, que incluye
+el comando de generación para Windows y para macOS/Linux).
 
 No compartir este valor públicamente ni subirlo a GitHub.
 
