@@ -14,6 +14,10 @@ Este repositorio contiene **únicamente el backend**: la API que guarda y calcul
 
 El frontend no calcula nada por su cuenta: consume esta API. Por eso el backend debe estar encendido para que la aplicación funcione.
 
+> **Repositorio del frontend:** https://github.com/MLahitton/PollaMundialista-Frontend
+>
+> La interfaz web del proyecto está en ese repositorio, con su propia guía de instalación.
+
 ---
 
 ## 2. Objetivo
