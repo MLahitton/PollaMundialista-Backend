@@ -1,354 +1,497 @@
 # Polla Mundialista 2026 — Backend
 
-Guía de instalación, configuración y ejecución local desde un computador limpio.
+Guía de instalación, configuración y ejecución del **backend** desde un computador limpio.
 
-Proyecto: Backend de la Polla Mundialista 2026Stack principal: Java 21, Spring Boot 4.1, PostgreSQL 17, Flyway, Spring Security, Google Identity / JWTContenedores: este proyecto no usa Docker.Sistema operativo de referencia: Windows 10/11 x64.
+Repositorio: https://github.com/MLahitton/PollaMundialista-Backend
 
-1. Qué necesitas instalar
+Este documento cubre únicamente el backend. El frontend tiene su propio repositorio y su
+propia documentación.
 
-Instala estas herramientas antes de clonar el repositorio.
+Este proyecto **no usa Docker**.
 
-1.1 Git
+---
 
-Descarga Git para Windows desde:
+## 1. Descripción del proyecto
 
-https://git-scm.com/install/windows
+Polla Mundialista 2026 es una aplicación para organizar una polla (quiniela) amistosa sobre la
+Copa Mundial de la FIFA 2026 entre los integrantes de un equipo.
 
-Durante la instalación puedes mantener las opciones recomendadas por defecto.
+Este repositorio contiene el **backend**: una API REST que se encarga de:
 
-Verifica:
+- **Autenticación.** Recibe un *Google ID Token*, lo valida contra las claves públicas de
+  Google y emite su **propio JWT**, que es el que autoriza el resto de peticiones.
+- **Participantes.** En el primer acceso de una cuenta de Google crea automáticamente su
+  *Participant*; en los siguientes reutiliza el mismo, con el mismo identificador interno.
+- **Torneo y partidos.** Carga el Mundial 2026 desde un dataset incluido en el repositorio:
+  1 torneo, 48 selecciones, 12 grupos, 7 fases y 104 partidos.
+- **Pronósticos.** Registra el marcador que predice cada participante y controla la ventana de
+  edición, que se cierra automáticamente 15 minutos antes del inicio de cada partido.
+- **Puntuación.** Calcula marcador exacto, resultado correcto y bonus por equipo clasificado.
+- **Ranking.** Construye la tabla del torneo con el Top 10 y la posición del participante.
+- **Reloj configurable.** Permite simular una fecha pasada para poder probar el torneo
+  (ver sección 12).
 
+---
+
+## 2. Objetivo
+
+Ofrecer la API sobre la que se apoya la Polla Mundialista: autenticar a los participantes,
+guardar sus pronósticos, calcular sus puntos y mantener el ranking del torneo.
+
+---
+
+## 3. Qué ofrece el backend
+
+- Login con Google mediante validación de ID Token y emisión de JWT propio.
+- Consulta del torneo activo, selecciones, fases, grupos y calendario completo.
+- Listado de partidos próximos según el reloj de la aplicación.
+- Alta y edición de pronósticos, con control de la ventana de cierre.
+- Consulta de los pronósticos propios y de los pronósticos públicos de otros participantes.
+- Cálculo de puntos: marcador exacto, resultado correcto y bonus por equipo clasificado.
+- Ranking del torneo con Top 10 y posición del participante autenticado.
+- Importador del dataset oficial del Mundial 2026, idempotente.
+- Reloj configurable en modo real o histórico, para simulación.
+- Migraciones automáticas de base de datos con Flyway.
+- Documentación interactiva de la API con Swagger UI.
+
+---
+
+## 4. Tecnologías utilizadas
+
+| Tecnología | Uso |
+|---|---|
+| Java 21 | Lenguaje |
+| Spring Boot 4.1 | Framework de la aplicación |
+| Spring Data JPA / Hibernate | Persistencia |
+| Spring Security | Seguridad |
+| Spring OAuth2 Resource Server | Validación de JWT |
+| Spring Validation | Validación de peticiones |
+| Maven (Maven Wrapper) | Build y ejecución |
+| PostgreSQL 17 | Base de datos |
+| Flyway | Migraciones de base de datos |
+| springdoc-openapi 3.0.3 | Swagger UI / OpenAPI |
+| Spring Boot Actuator | Health checks |
+| Google Identity | Validación de los ID Token de Google |
+
+---
+
+## 5. Requisitos previos
+
+Para el backend necesitas **Git**, **Java 21** y **PostgreSQL 17**.
+
+**No necesitas instalar Maven**: el repositorio incluye Maven Wrapper (`mvnw` y `mvnw.cmd`),
+que descarga por sí solo la versión correcta.
+
+### 5.1 Windows
+
+#### Git — descargar el código
+
+Descarga desde https://git-scm.com/download/win y mantén las opciones por defecto.
+
+```powershell
 git --version
+```
 
-Debe mostrar una versión válida de Git.
+Si vas a clonar dentro de una carpeta muy anidada, habilita antes las rutas largas. Algunos
+archivos del proyecto tienen rutas profundas y Windows limita a 260 caracteres:
 
-1.2 Java JDK 21
+```powershell
+git config --global core.longpaths true
+```
 
-El backend está desarrollado con Java 21. Se recomienda Eclipse Temurin 21.
+#### Java JDK 21 — ejecutar el backend
 
-Descarga oficial:
+Se recomienda Eclipse Temurin 21: https://adoptium.net/temurin/releases/?version=21
 
-https://adoptium.net/temurin/releases/?version=21
-
-También puede instalarse con winget:
-
+```powershell
 winget install EclipseAdoptium.Temurin.21.JDK
+```
 
-Cierra y vuelve a abrir PowerShell después de instalar.
+Cierra y vuelve a abrir PowerShell. Verifica:
 
-Verifica:
-
+```powershell
 java -version
 javac -version
+```
 
-Ambos deben indicar Java 21.
+Ambos deben indicar **21**. Si aparece otra versión, revisa `JAVA_HOME` y el orden del `PATH`:
 
-Si Windows sigue usando otra versión de Java, revisa JAVA_HOME y el orden del PATH.
+```powershell
+$env:JAVA_HOME
+where.exe java
+```
 
-Ejemplo de JAVA_HOME:
+`JAVA_HOME` debe apuntar a algo como `C:\Program Files\Eclipse Adoptium\jdk-21.x.x.x-hotspot`.
 
-C:\Program Files\Eclipse Adoptium\jdk-21.x.x.x-hotspot
+#### PostgreSQL 17 — base de datos
 
-No es necesario instalar Maven globalmente. El repositorio incluye Maven Wrapper (mvnw / mvnw.cmd).
-
-1.3 PostgreSQL 17
-
-El proyecto fue desarrollado y validado con PostgreSQL 17.x.
-
-Descarga oficial para Windows:
-
-https://www.postgresql.org/download/windows/
+Descarga desde https://www.postgresql.org/download/windows/
 
 Durante la instalación:
 
-Mantén el puerto 5432, salvo que tengas una razón para cambiarlo.
+- mantén el puerto **5432**;
+- conserva el usuario administrador **postgres**;
+- **guarda la contraseña que definas**: la necesitarás en la sección 8;
+- instala las herramientas de línea de comandos cuando el instalador las ofrezca.
 
-Conserva el usuario administrador postgres.
-
-Define y guarda tu contraseña local de PostgreSQL.
-
-Instala las herramientas de línea de comandos cuando el instalador las ofrezca.
-
-Verifica, si psql está disponible en PATH:
-
+```powershell
 psql --version
+```
 
-Debe indicar PostgreSQL 17.x.
+Si `psql` no se reconoce, el binario suele estar en `C:\Program Files\PostgreSQL\17\bin`.
+Puedes añadir esa carpeta al `PATH` o usar DBeaver en su lugar.
 
-1.4 DBeaver Community — recomendado
+#### Comprobar el Maven Wrapper
 
-No es obligatorio para que el backend funcione, pero es la herramienta recomendada para revisar la base de datos.
+```powershell
+.\mvnw.cmd --version
+```
 
-Descarga:
+Debe mostrar Maven y **Java 21**.
 
-https://dbeaver.io/download/
+#### Herramientas recomendadas (opcionales)
 
-Conexión local habitual:
+- **DBeaver Community** (https://dbeaver.io/download/) para inspeccionar la base de datos.
+- **Visual Studio Code** (https://code.visualstudio.com) con *Extension Pack for Java* y
+  *Spring Boot Extension Pack*.
 
-Host: localhost
-Port: 5432
-Database: polla_mundialista
-Username: postgres
-Password: tu contraseña local
+### 5.2 macOS
 
-1.5 Visual Studio Code — recomendado
+Se asume [Homebrew](https://brew.sh) instalado.
 
-Descarga:
+```bash
+# Git
+brew install git
+git --version
 
-https://code.visualstudio.com/docs/setup/windows
+# Java 21
+brew install --cask temurin@21
+java -version
+javac -version
 
-Extensiones recomendadas:
+# PostgreSQL 17
+brew install postgresql@17
+brew services start postgresql@17
+psql --version
+```
 
-Extension Pack for Java — Microsoft
+`java -version` y `javac -version` deben indicar **21**.
 
-Spring Boot Extension Pack — VMware
+Con Homebrew, el usuario de PostgreSQL por defecto es tu usuario de macOS y no `postgres`.
+Si es tu caso, tendrás que ajustar `DB_USERNAME` en la sección 8.
 
-Estas extensiones facilitan IntelliSense, ejecución, Maven, JUnit y soporte de Spring Boot.
+La primera vez puede hacer falta dar permiso de ejecución al wrapper:
 
-2. Clonar el repositorio
+```bash
+chmod +x mvnw
+./mvnw --version
+```
 
-En una carpeta de trabajo, abre PowerShell:
+### 5.3 Diferencias de comandos entre sistemas
 
+| Acción | Windows (PowerShell) | macOS / Linux |
+|---|---|---|
+| Maven Wrapper | `.\mvnw.cmd` | `./mvnw` |
+| Copiar la plantilla de entorno | `Copy-Item .env.example .env` | `cp .env.example .env` |
+| Permiso de ejecución del wrapper | no aplica | `chmod +x mvnw` |
+| Scripts del reloj | `.\scripts\*.ps1` | no disponibles, ver sección 12.5 |
+
+El **código del proyecto es idéntico** en ambos sistemas: solo cambian los comandos.
+
+---
+
+## 6. Clonar el repositorio
+
+```powershell
 git clone https://github.com/MLahitton/PollaMundialista-Backend.git
 cd PollaMundialista-Backend
+```
 
-Comprueba el estado:
+La rama principal es `main`.
 
+```powershell
 git status
 git branch --show-current
+```
 
-La rama principal del proyecto es main.
+---
 
-Antes de comenzar a trabajar:
+## 7. Crear la base de datos
 
-git pull
+El backend crea las **tablas** automáticamente, pero la **base de datos** debe existir antes.
+Flyway no puede crear la base que va a migrar.
 
-3. Crear la base de datos local
+**Opción A — línea de comandos**
 
-El backend crea las tablas mediante Flyway, pero la base de datos debe existir previamente.
+```bash
+psql -U postgres -c "CREATE DATABASE polla_mundialista;"
+```
 
-Opción A — DBeaver
+**Opción B — DBeaver**
 
-Conéctate a PostgreSQL con el usuario postgres.
+Conéctate con el usuario `postgres`, clic derecho en *Databases* → *Create New Database* →
+nombre `polla_mundialista`.
 
-Click derecho en Databases.
+**No crees tablas, relaciones ni índices a mano.** De eso se encarga Flyway (sección 10).
 
-Selecciona Create New Database.
+---
 
-Nombre:
+## 8. Configurar las variables de entorno
 
-polla_mundialista
+El repositorio no contiene contraseñas ni secretos. Cada desarrollador configura los suyos
+**una sola vez** en un archivo `.env` en la raíz del backend.
 
-Guarda.
+`.env` está en `.gitignore` y nunca se sube. Lo carga automáticamente `application.properties`:
 
-Opción B — SQL
-
-CREATE DATABASE polla_mundialista;
-
-No necesitas crear manualmente tablas, relaciones ni esquemas adicionales.
-
-Cuando el backend arranca, Flyway aplica las migraciones automáticamente.
-
-4. Variables de entorno del backend
-
-El repositorio no contiene contraseñas ni secretos reales. Cada desarrollador configura los suyos
-UNA SOLA VEZ en un archivo `.env` en la raíz del backend.
-
-`.env` está ignorado por Git y lo carga automáticamente `application.properties` mediante:
-
+```properties
 spring.config.import=optional:file:./.env[.properties]
+```
 
-Esto significa que NO tienes que exportar variables cada vez que abres una terminal.
-Configuras el `.env` una vez y a partir de ahí basta con:
+No tienes que exportar variables cada vez que abres una terminal.
 
-.\mvnw.cmd spring-boot:run
+### 8.1 Crear tu `.env`
 
-4.1 Crear tu .env
+```powershell
+Copy-Item .env.example .env      # Windows
+```
 
-Copia la plantilla versionada y complétala:
-
-Copy-Item .env.example .env
+```bash
+cp .env.example .env             # macOS / Linux
+```
 
 `.env.example` documenta cada variable. Nunca escribas valores reales en `.env.example`.
 
-4.2 PostgreSQL
+> **Cuidado con los valores vacíos.** Si dejas una variable escrita pero sin valor
+> (por ejemplo `DB_URL=`), ese valor vacío **sobrescribe** el valor por defecto del proyecto y
+> el backend puede no arrancar. Si no necesitas una variable, déjala comentada.
 
-En tu `.env`:
+### 8.2 Variables
 
+| Variable | Obligatoria | Valor por defecto | Para qué sirve |
+|---|---|---|---|
+| `DB_PASSWORD` | **Sí** | — | Contraseña de tu PostgreSQL |
+| `JWT_SECRET` | **Sí** | — | Firma los JWT que emite el backend |
+| `AUTO_SCORING_ENABLED` | No | `true` | Scheduler de puntuación automática |
+| `GOOGLE_CLIENT_ID` | No | Client ID del proyecto | Valida el Google ID Token |
+| `DB_URL` | No | `jdbc:postgresql://localhost:5432/polla_mundialista` | Conexión JDBC |
+| `DB_USERNAME` | No | `postgres` | Usuario de PostgreSQL |
+| `CORS_ALLOWED_ORIGINS` | No | `http://localhost:3000` | Orígenes permitidos por CORS |
+| `JWT_ISSUER` | No | `mundial-polla` | Claim `iss` del token |
+| `JWT_AUDIENCE` | No | `mundial-polla-api` | Claim `aud` del token |
+| `JWT_TTL` | No | `PT8H` | Vigencia del token |
+| `AUTO_SCORING_FIXED_DELAY` | No | `PT1M` | Frecuencia del scheduler |
+
+En la práctica solo necesitas rellenar **`DB_PASSWORD`** y **`JWT_SECRET`**.
+
+### 8.3 PostgreSQL
+
+```properties
 DB_PASSWORD=tu_password_local_de_postgres
+```
 
-Opcionalmente, el proyecto admite `DB_USERNAME` y `DB_URL`.
-Si no los defines, se usan los valores locales por defecto del proyecto.
+Si instalaste PostgreSQL con Homebrew en macOS y tu usuario no es `postgres`, descomenta
+también `DB_USERNAME` con tu usuario.
 
-4.3 Google Client ID
+### 8.4 Generar tu `JWT_SECRET`
 
-Solicita al responsable del proyecto el Google OAuth Web Client ID usado por la Polla Mundialista.
+`JWT_SECRET` es el secreto **interno** con el que este backend firma los JWT que emite después
+de validar el Google ID Token. Cada desarrollador genera el suyo; no hace falta compartirlo
+entre computadores.
 
-En tu `.env`:
+**Requisito real del proyecto** (validado en `AppJwtConfig`): Base64 **estándar** de al menos
+**32 bytes**. El algoritmo de firma es HMAC-SHA256 (HS256). No existe valor por defecto: si
+falta, el backend falla al arrancar en lugar de firmar con un secreto conocido.
 
-GOOGLE_CLIENT_ID=tu_client_id.apps.googleusercontent.com
+Los comandos siguientes generan 48 bytes.
 
-El Client ID es público: viaja al navegador y no es un secreto.
-El mismo valor debe usarse en el frontend como `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
+Windows (PowerShell), lo añade al `.env` sin mostrarlo en pantalla:
 
-IMPORTANTE: el Client ID NO es el Client Secret. Este proyecto nunca necesita el
-Google Client Secret; no lo pongas en ninguna variable, ni aquí ni en el frontend.
-
-4.4 JWT Secret local
-
-`JWT_SECRET` es el secreto INTERNO con el que este backend firma sus propios JWT,
-los que emite después de validar el Google ID Token. No tiene ninguna relación con Google:
-no es el Client ID ni el Client Secret.
-
-Requisito exigido por `AppJwtConfig`: Base64 estándar de al menos 32 bytes.
-Pegar ahí un Client Secret de Google (formato `GOCSPX-...`) falla con
-`Illegal base64 character 2d`, porque el guion no pertenece al alfabeto Base64.
-
-Genera el tuyo y añádelo al `.env` sin imprimirlo en pantalla:
-
+```powershell
 $bytes = New-Object byte[] 48
 $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 $rng.GetBytes($bytes)
 "JWT_SECRET=" + [Convert]::ToBase64String($bytes) | Out-File -Append -Encoding ascii .env
 $rng.Dispose()
+```
 
-Debe permanecer ESTABLE entre reinicios. Si lo cambias, todas las sesiones abiertas
-dejan de ser válidas y el frontend empezará a recibir 401.
+macOS / Linux:
 
-No publiques JWT_SECRET en GitHub, chats, capturas ni documentación.
+```bash
+echo "JWT_SECRET=$(openssl rand -base64 48)" >> .env
+```
 
-4.5 Scoring automático durante desarrollo
+Debe permanecer **estable entre reinicios**: si lo cambias, todos los JWT emitidos antes dejan
+de ser válidos y las peticiones autenticadas empezarán a devolver 401.
 
-Para desarrollo y reproducción histórica se recomienda desactivar el scheduler automático.
-En tu `.env`:
+### 8.5 Google
 
-AUTO_SCORING_ENABLED=false
+El backend usa **únicamente** el Google Client ID, para comprobar que el ID Token recibido fue
+emitido para esta aplicación. Valida además la firma contra las claves públicas de Google, el
+emisor, la expiración y que el email esté verificado.
 
-Esto evita que, al arrancar el backend en tiempo real, se procesen inmediatamente todos los partidos históricos.
+El proyecto ya trae configurado el Client ID compartido, así que **normalmente no tienes que
+hacer nada**. Solo defínelo en tu `.env` si vas a usar otro cliente OAuth:
 
-Cuando queramos probar el scheduler de forma explícita podremos activarlo temporalmente.
-
-4.6 CORS
-
-El backend permite por defecto el frontend local:
-
-http://localhost:3000
-
-Si necesitas otro origen, en tu `.env`:
-
-CORS_ALLOWED_ORIGINS=http://localhost:3000
-
-Puede recibir varios orígenes separados por coma.
-
-5. Resumen de variables para desarrollo
-
-Todo vive en el archivo `.env` de la raíz del backend, que configuras UNA VEZ:
-
-DB_PASSWORD=tu_password_local_de_postgres
+```properties
 GOOGLE_CLIENT_ID=tu_client_id.apps.googleusercontent.com
-JWT_SECRET=tu_secreto_base64_de_32_bytes_o_mas
+```
+
+Para obtener uno propio: Google Cloud Console → *APIs & Services* → *Credentials* → *Create
+credentials* → *OAuth client ID* → tipo **Web application**. El origen desde el que se sirva la
+aplicación cliente debe estar registrado como *Authorized JavaScript origin* de ese cliente;
+en desarrollo local eso es `http://localhost:3000`.
+
+El Client ID es un valor **público**: viaja al navegador y no es un secreto.
+
+> **Tres cosas distintas que se confunden a menudo:**
+>
+> | | Qué es | ¿Lo usa este backend? |
+> |---|---|---|
+> | `GOOGLE_CLIENT_ID` | Identifica la aplicación ante Google. Público. | Sí |
+> | `GOOGLE_CLIENT_SECRET` | Credencial privada de Google OAuth. | **No, nunca** |
+> | `JWT_SECRET` | Secreto interno del backend para firmar sus propios JWT. | Sí |
+>
+> Este backend **no utiliza el Google Client Secret** en ningún punto: el flujo se basa en
+> validar el ID Token, no en un intercambio de código de autorización. No lo configures.
+>
+> Pegar un Client Secret de Google (formato `GOCSPX-...`) en `JWT_SECRET` hace que el backend
+> falle al arrancar con `Illegal base64 character 2d`, porque el guion no pertenece al
+> alfabeto Base64.
+
+### 8.6 CORS
+
+El backend solo acepta peticiones del navegador procedentes de los orígenes configurados en
+`CORS_ALLOWED_ORIGINS`. Por defecto permite `http://localhost:3000`.
+
+Admite varios orígenes separados por coma:
+
+```properties
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://192.168.1.100:3000
+```
+
+No se admite el comodín `*`: el backend rechaza esa configuración al arrancar.
+
+### 8.7 Scoring automático
+
+Durante el desarrollo se recomienda desactivar el scheduler para que no se puntúen de golpe
+todos los partidos al arrancar:
+
+```properties
 AUTO_SCORING_ENABLED=false
+```
 
-Este archivo persiste entre reinicios y entre terminales. No hay que exportar nada
-manualmente antes de arrancar, y `JWT_SECRET` se mantiene estable, de modo que las
-sesiones abiertas siguen siendo válidas después de reiniciar el backend.
+Ya viene así en `.env.example`.
 
-`.env` está en `.gitignore`: nunca se sube al repositorio.
+---
 
-Nota: si además defines alguna de estas variables como variable de entorno del sistema,
-esa tiene prioridad sobre el `.env`. Exportar un valor de ejemplo (por ejemplo
-`$env:GOOGLE_CLIENT_ID = "TU_CLIENT_ID..."`) hace que el backend use ese valor falso
-y que el login devuelva 401. Ante un 401 inesperado, comprueba primero:
+## 9. Compilar y ejecutar las pruebas
 
-$env:GOOGLE_CLIENT_ID
+```powershell
+.\mvnw.cmd clean test        # Windows
+```
 
-6. Primera instalación / compilación y pruebas
+```bash
+./mvnw clean test            # macOS / Linux
+```
 
-No necesitas instalar Maven manualmente.
+La primera ejecución descarga las dependencias de Maven, así que tarda varios minutos.
 
-Desde la raíz del backend:
+> **Este comando no solo descarga dependencias.** La prueba `MundialBackendApplicationTests`
+> es un `@SpringBootTest` que levanta el contexto completo de Spring. Antes de ejecutarlo
+> necesitas PostgreSQL en marcha, la base creada (sección 7) y tu `.env` configurado
+> (sección 8). Si lo lanzas antes, fallará por conexión o configuración: eso no significa que
+> el proyecto esté roto, sino que falta configurar el entorno.
 
-.\mvnw.cmd clean test
+Resultado esperado: `BUILD SUCCESS`.
 
-La primera ejecución descargará las dependencias Maven necesarias.
+---
 
-IMPORTANTE: este comando no solo descarga dependencias. La prueba
-`MundialBackendApplicationTests` es un `@SpringBootTest` que levanta el
-contexto completo de Spring, así que antes de ejecutarlo necesitas:
+## 10. Arrancar el backend y migraciones
 
-- PostgreSQL en ejecución;
-- la base `polla_mundialista` ya creada (sección 3);
-- tu `.env` configurado con DB_PASSWORD y JWT_SECRET (sección 4).
+```powershell
+.\mvnw.cmd spring-boot:run   # Windows
+```
 
-Si lo lanzas antes de eso, fallará con un error de conexión o de configuración
-que no significa que el proyecto esté roto: significa que aún falta configurar
-el entorno.
+```bash
+./mvnw spring-boot:run       # macOS / Linux
+```
 
-Resultado esperado al final:
+El flujo en el primer arranque es:
 
-BUILD SUCCESS
+```
+PostgreSQL vacío
+      ↓
+iniciar el backend
+      ↓
+Flyway ejecuta las migraciones
+      ↓
+tablas creadas
+```
 
-Si Java no es 21, corrige Java antes de continuar.
+Verás en el log cómo Flyway crea el esquema desde cero:
 
-7. Arrancar el backend
-
-.\mvnw.cmd spring-boot:run
-
-Resultado esperado:
-
-Tomcat started on port 8080
+```
+Creating Schema History table "public"."flyway_schema_history"
+Migrating schema "public" to version "1 - create participants"
+...
+Successfully applied 7 migrations to schema "public", now at version v7
+Tomcat started on port 8080 (http)
 Started MundialBackendApplication
+```
 
-Backend:
+Las **7 migraciones** de `src/main/resources/db/migration` crean estas 9 tablas:
 
-http://localhost:8080
+`participants`, `tournaments`, `teams`, `stages`, `tournament_groups`, `group_teams`,
+`matches`, `predictions`, `prediction_scores`.
 
-Swagger:
+**No ejecutes los scripts SQL a mano.** Flyway los aplica automáticamente y lleva su propio
+registro en la tabla `flyway_schema_history`. Para revisar el estado:
 
-http://localhost:8080/swagger-ui.html
-
-OpenAPI JSON:
-
-http://localhost:8080/v3/api-docs
-
-Health:
-
-http://localhost:8080/actuator/health
-
-8. Qué hace Flyway en el primer arranque
-
-Flyway valida/aplica automáticamente las migraciones en:
-
-src/main/resources/db/migration
-
-No ejecutes manualmente los scripts de migración en DBeaver.
-
-Para revisar el estado:
-
-SELECT
-    installed_rank,
-    version,
-    description,
-    success
+```sql
+SELECT installed_rank, version, description, success
 FROM flyway_schema_history
 ORDER BY installed_rank;
+```
 
-El esquema debe quedar actualizado a la última migración incluida en el repositorio.
+Enlaces útiles con el backend en marcha:
 
-9. Importar el dataset del Mundial 2026
+| Recurso | URL |
+|---|---|
+| API | http://localhost:8080 |
+| Swagger UI | http://localhost:8080/swagger-ui.html |
+| OpenAPI JSON | http://localhost:8080/v3/api-docs |
+| Health | http://localhost:8080/actuator/health |
 
-En una base recién creada, Flyway crea la estructura pero todavía no existen los 104 partidos.
+---
 
-Con el backend arrancado, abre Swagger y ejecuta:
+## 11. Importar el dataset del Mundial
 
+Las migraciones crean la estructura, pero **no insertan datos**. El torneo, las selecciones y
+el calendario se cargan con el importador incluido en el proyecto.
+
+**El dataset ya viene en el repositorio**: `src/main/resources/datasets/world-cup-2026.json`.
+No hay que crear ningún dato a mano ni descargar nada, y el importador no necesita conexión a
+internet.
+
+Con el backend arrancado, ejecuta:
+
+```
 POST /api/v1/internal/dataset/world-cup-2026/import
+```
 
-No lleva body.
+No lleva body y no requiere autenticación. Puedes lanzarlo desde Swagger UI o por terminal:
 
-El importador usa el JSON local incluido dentro del backend; no necesita internet en runtime.
+```powershell
+Invoke-RestMethod -Method POST -Uri "http://localhost:8080/api/v1/internal/dataset/world-cup-2026/import"
+```
 
-En una base vacía, el resultado esperado es aproximadamente:
+```bash
+curl -X POST http://localhost:8080/api/v1/internal/dataset/world-cup-2026/import
+```
 
+Resultado esperado sobre una base recién creada:
+
+```json
 {
   "tournamentsCreated": 1,
   "tournamentsUpdated": 0,
@@ -363,469 +506,367 @@ En una base vacía, el resultado esperado es aproximadamente:
   "matchesUpdated": 0,
   "matchesUnchanged": 0
 }
+```
 
-El importador es idempotente: ejecutarlo otra vez no debe duplicar la información.
+Es decir: **1 torneo, 48 equipos y 104 partidos**, además de 12 grupos y 7 fases.
 
-10. Probar autenticación Google
+El importador es **idempotente**: ejecutarlo de nuevo no duplica nada, solo actualiza lo que
+haya cambiado, y nunca borra información.
 
-Para una prueba completa, el frontend debe estar ejecutándose en:
+Comprobación:
 
-http://localhost:3000
-
-El flujo es:
-
-Frontend
-→ Google Identity Services
-→ Google ID Token
-→ POST /api/v1/auth/google
-→ backend crea/reutiliza Participant
-→ backend emite JWT propio
-→ GET /api/v1/me
-
-En el primer login de una cuenta Google válida se crea automáticamente un Participant.
-
-En los siguientes logins se reutiliza el mismo participante y el mismo UUID interno.
-
-Puedes verificarlo en DBeaver:
-
+```sql
 SELECT
-    id,
-    email,
-    display_name,
-    is_active,
-    created_at,
-    last_login_at
-FROM participants
-ORDER BY created_at DESC;
+  (SELECT COUNT(*) FROM tournaments) AS torneos,
+  (SELECT COUNT(*) FROM teams)       AS equipos,
+  (SELECT COUNT(*) FROM matches)     AS partidos;
+```
 
-11. Probar el reloj histórico
+---
 
-El sistema puede simular el Mundial en fechas pasadas.
+## 12. El reloj de la aplicación
 
-Consultar reloj:
+Esta sección es importante: sin ella parecerá que el backend está roto.
 
+### 12.1 Modo REAL
+
+`REAL` utiliza la fecha y hora real del sistema. **Es el modo normal del backend** y el que se
+activa siempre al arrancar.
+
+### 12.2 Modo HISTORICAL_REPLAY
+
+`HISTORICAL_REPLAY` congela la aplicación en un instante concreto del pasado. Sirve para
+simular que el backend está situado antes o durante el Mundial, de modo que los partidos
+aparezcan como próximos y las ventanas de pronóstico se comporten según esa fecha simulada.
+
+Consultar el estado en cualquier momento:
+
+```
 GET /api/v1/internal/clock
+```
 
-Cambiar a modo histórico:
+### 12.3 ¿Por qué no aparecen los partidos?
 
-POST /api/v1/internal/clock/historical
+El dataset contiene partidos del **2026-06-11** al **2026-07-19**.
 
-Body ejemplo:
+El endpoint `GET /api/v1/matches/upcoming` devuelve los partidos cuya fecha de inicio sea
+**posterior** a la hora del reloj. Si el backend está en `REAL` y la fecha actual ya es
+posterior al Mundial, la respuesta será `200` con una lista vacía:
 
-{
-  "instant": "2026-06-11T18:44:00Z"
-}
+```json
+[]
+```
 
-Volver a tiempo real:
+**Esto no significa que los partidos se hayan eliminado.** Los 104 partidos siguen almacenados
+en la base de datos y `GET /api/v1/matches` los devuelve todos. Lo único que ocurre es que
+ninguno está en el futuro respecto al reloj.
 
-POST /api/v1/internal/clock/real
+### 12.4 Activar el reloj histórico (Windows)
 
-El reloj histórico es una herramienta de desarrollo/demo. Al reiniciar el backend vuelve a REAL.
+Con el backend arrancado:
 
-11.1 Scripts para simular el Mundial
-
-En lugar de escribir esas peticiones a mano, el repositorio incluye dos utilidades
-de desarrollo en `scripts/`. Solo llaman a los endpoints anteriores: no modifican
-código, ni base de datos, ni las fechas de los partidos.
-
-### Desarrollo normal
-
-El backend utiliza el reloj REAL con la hora actual. Ese es el comportamiento por
-defecto y no hay que hacer nada para obtenerlo: cada vez que arrancas el backend
-empieza en REAL, porque el modo del reloj vive solo en memoria.
-
-Con el reloj en REAL, `GET /api/v1/matches/upcoming` devuelve `[]` y el frontend
-muestra "No hay partidos próximos". **Eso es correcto**, no es un error: el dataset
-del Mundial 2026 va del 11 de junio al 19 de julio de 2026, fechas que ya pasaron
-respecto a la fecha actual, así que no queda ningún partido "próximo".
-
-### Probar el Mundial
-
-Con el backend ya arrancado, desde la raíz del backend:
-
+```powershell
 .\scripts\simular-mundial.ps1
+```
 
-El script comprueba que el backend responda, activa HISTORICAL_REPLAY en
-`2026-06-10T12:00:00Z` (un día antes del primer partido) y muestra el modo del
-reloj, la fecha simulada, el torneo, la cantidad de partidos próximos y el primero
-de ellos con su ventana de pronóstico. Si algo no cuadra, imprime un diagnóstico
-y no cambia nada más.
+El script comprueba que el backend responda, sitúa el reloj en `2026-06-10T12:00:00Z` (un día
+antes del primer partido) y muestra el modo, la fecha simulada, el torneo, la cantidad de
+partidos próximos y el primero de ellos con su ventana de pronóstico. Si algo no cuadra,
+imprime un diagnóstico y no cambia nada más.
 
-Admite otro instante si quieres situarte en mitad del torneo:
+Puedes situarte en otro momento del torneo:
 
+```powershell
 .\scripts\simular-mundial.ps1 -Instant "2026-06-25T12:00:00Z"
+```
 
-Recuerda que al reiniciar el backend el reloj vuelve a REAL y habrá que volver a
-ejecutar el script. Es intencional: HISTORICAL_REPLAY es únicamente una
-herramienta de simulación para poder probar el dataset del Mundial 2026, nunca el
-modo de trabajo por defecto.
+### 12.5 Activar el reloj histórico (macOS / Linux)
 
-### Volver al tiempo real
+Todavía no existe un equivalente `.sh` de esos scripts. Usa el endpoint directamente:
 
+```bash
+curl -X POST http://localhost:8080/api/v1/internal/clock/historical \
+  -H "Content-Type: application/json" \
+  -d '{"instant":"2026-06-10T12:00:00Z"}'
+```
+
+Consultar el resultado:
+
+```bash
+curl http://localhost:8080/api/v1/internal/clock
+```
+
+Debe responder con `"mode": "HISTORICAL_REPLAY"`.
+
+### 12.6 Volver al tiempo real
+
+Windows:
+
+```powershell
 .\scripts\restaurar-tiempo-real.ps1
+```
 
-Confirma que el modo vuelve a REAL y muestra la hora actual. Reiniciar el backend
-consigue exactamente lo mismo.
+macOS / Linux, o desde Swagger:
 
-12. Scoring en desarrollo
+```bash
+curl -X POST http://localhost:8080/api/v1/internal/clock/real
+```
 
-Con AUTO_SCORING_ENABLED=false, puedes disparar manualmente un ciclo de scoring:
+### 12.7 Qué ocurre al reiniciar
 
-POST /api/v1/internal/scoring/run
+El estado del reloj vive **solo en memoria**. Por lo tanto:
 
-O procesar un partido específico:
+```
+HISTORICAL_REPLAY
+      ↓
+reiniciar el backend
+      ↓
+REAL
+```
 
-POST /api/v1/internal/scoring/matches/{matchId}
+Los datos **no** se borran. Los 104 partidos **no** se borran. Lo único que cambia es el
+reloj, que vuelve a su modo por defecto.
 
-No actives el scheduler automático en una base histórica sin saber qué instante está usando ApplicationClock.
+Es intencional: `HISTORICAL_REPLAY` es una herramienta de simulación, nunca el modo de trabajo
+por defecto. Si reinicias y quieres seguir viendo el Mundial, vuelve a activarlo.
 
-13. Verificación rápida de entorno
+---
 
-Ejecuta:
+## 13. Verificar que el backend funciona
 
-git --version
-java -version
-javac -version
-psql --version
+Con el backend arrancado y el dataset importado:
 
-Luego:
+**1. Estado general**
 
-.\mvnw.cmd --version
+```bash
+curl http://localhost:8080/actuator/health
+```
 
-Debes tener:
+Debe responder `"status":"UP"`, incluida la base de datos.
 
-Git operativo.
+**2. Torneo activo**
 
-Java/Javac 21.
+```bash
+curl http://localhost:8080/api/v1/tournaments/active
+```
 
-PostgreSQL 17.x recomendado.
+Debe devolver *World Cup 2026*. Anota el `id`: lo necesitas en el paso siguiente.
 
-Maven Wrapper operativo.
+**3. Partidos**
 
-Base polla_mundialista creada.
+```bash
+curl "http://localhost:8080/api/v1/matches?tournamentId=<ID>"
+```
 
-Variables de entorno cargadas.
+Debe devolver los 104 partidos.
 
-14. Flujo recomendado cada día
+**4. Partidos próximos**
 
-git pull
+```bash
+curl "http://localhost:8080/api/v1/matches/upcoming?tournamentId=<ID>"
+```
 
-.\mvnw.cmd spring-boot:run
+Con el reloj en `REAL` devolverá `[]` (ver sección 12.3). Tras activar el modo histórico debe
+devolver los 104.
 
-Eso es todo: la configuración vive en `.env` y no hay que exportar nada.
+**5. Seguridad**
 
-Después abre Swagger o levanta el frontend.
+```bash
+curl -i http://localhost:8080/api/v1/me
+```
 
-15. Problemas comunes
+Sin token debe responder **401**. Es la respuesta correcta: confirma que los endpoints
+protegidos exigen autenticación.
 
-java sigue mostrando Java 8/17/otra versión
+**6. Swagger**
 
-Revisa:
+Abre http://localhost:8080/swagger-ui.html para explorar y probar toda la API.
 
+---
+
+## 14. Endpoints principales
+
+Requieren cabecera `Authorization: Bearer <JWT>`:
+
+| Endpoint | Descripción |
+|---|---|
+| `GET /api/v1/me` | Perfil del participante autenticado |
+| `GET /api/v1/me/predictions` | Mis pronósticos |
+| `PUT /api/v1/me/predictions/matches/{matchId}` | Crear o actualizar un pronóstico |
+| `GET /api/v1/me/scores` | Mis puntos |
+| `GET /api/v1/me/rankings/tournaments/{tournamentId}` | Ranking con mi posición |
+| `GET /api/v1/me/public-predictions/matches/{matchId}` | Pronósticos visibles de un partido |
+
+Públicos:
+
+| Endpoint | Descripción |
+|---|---|
+| `POST /api/v1/auth/google` | Intercambia el Google ID Token por un JWT propio |
+| `GET /api/v1/tournaments/active` | Torneo activo |
+| `GET /api/v1/matches?tournamentId=...` | Todos los partidos |
+| `GET /api/v1/matches/upcoming?tournamentId=...` | Partidos próximos según el reloj |
+| `GET /api/v1/matches/{id}` | Detalle de un partido |
+
+Herramientas de desarrollo (públicas en local):
+
+| Endpoint | Descripción |
+|---|---|
+| `POST /api/v1/internal/dataset/world-cup-2026/import` | Importar el dataset |
+| `GET /api/v1/internal/clock` | Estado del reloj |
+| `POST /api/v1/internal/clock/historical` | Activar el modo histórico |
+| `POST /api/v1/internal/clock/real` | Volver a la hora real |
+| `POST /api/v1/internal/scoring/run` | Ejecutar un ciclo de puntuación |
+| `POST /api/v1/internal/scoring/matches/{matchId}` | Puntuar un partido concreto |
+
+La lista completa está en Swagger UI.
+
+---
+
+## 15. Resumen: de cero a funcionando
+
+```
+1. Instalar Git, Java 21 y PostgreSQL 17
+2. git clone del repositorio
+3. CREATE DATABASE polla_mundialista;
+4. Copy-Item .env.example .env      (o cp)
+5. Rellenar DB_PASSWORD y generar JWT_SECRET
+6. .\mvnw.cmd spring-boot:run       → Flyway crea las 9 tablas
+7. POST /api/v1/internal/dataset/world-cup-2026/import
+     → 1 torneo, 48 equipos, 104 partidos
+8. .\scripts\simular-mundial.ps1    → activa el modo histórico
+9. Verificar con Swagger o curl (sección 13)
+```
+
+---
+
+## 16. Problemas comunes
+
+**`Port 8080 was already in use`**
+
+Otro proceso ocupa el puerto. Identifícalo y detenlo:
+
+```powershell
+Get-NetTCPConnection -LocalPort 8080 -State Listen | ForEach-Object { Get-Process -Id $_.OwningProcess }
+```
+
+```bash
+lsof -i :8080
+```
+
+**`JWT_SECRET must be a valid Base64 secret with at least 32 bytes`**
+
+El valor de `JWT_SECRET` no es Base64 estándar o es demasiado corto. Causa habitual: haber
+pegado un Google Client Secret (`GOCSPX-...`). Genera uno nuevo con la sección 8.4.
+
+**`GOOGLE_CLIENT_ID must be configured`**
+
+La variable está definida pero vacía. Coméntala en tu `.env` para usar el valor por defecto
+del proyecto, o dale un valor real.
+
+**Java no es la versión 21**
+
+```powershell
 java -version
 where.exe java
 $env:JAVA_HOME
+```
 
-Java 21 debe aparecer primero en PATH.
+Java 21 debe aparecer primero en el `PATH`.
 
-DB_PASSWORD no existe
+**Error de conexión con PostgreSQL**
 
-Revisa que tu archivo `.env` exista en la raíz del backend y contenga
-`DB_PASSWORD` con tu contraseña de PostgreSQL. Si aún no lo has creado:
+Comprueba que el servicio esté iniciado, que el puerto sea 5432, que la base
+`polla_mundialista` exista y que `DB_PASSWORD` y `DB_USERNAME` sean correctos.
 
-Copy-Item .env.example .env
+**Las peticiones autenticadas devuelven 401**
 
-Error de conexión PostgreSQL
+- El `GOOGLE_CLIENT_ID` del backend debe ser el mismo que usa la aplicación cliente al pedir
+  el ID Token a Google.
+- No has puesto un Client Secret donde iba el Client ID.
+- **Comprueba que no tengas una variable de entorno del sistema sobrescribiendo el `.env`.**
+  Las variables del sistema tienen prioridad sobre `.env`, así que exportar un valor de
+  ejemplo hace que el backend use ese valor falso:
 
-Comprueba:
+  ```powershell
+  $env:GOOGLE_CLIENT_ID
+  ```
 
-servicio PostgreSQL iniciado;
+  Debe estar vacío.
 
-puerto 5432;
+**Peticiones bloqueadas por CORS**
 
-base polla_mundialista existente;
+El origen desde el que se llama al backend debe estar en `CORS_ALLOWED_ORIGINS` (sección 8.6).
 
-contraseña correcta;
+**`/matches/upcoming` devuelve `[]`**
 
-usuario postgres.
+Es lo esperado con el reloj en `REAL`. Activa el modo histórico (sección 12) o revisa que
+hayas importado el dataset (sección 11).
 
-Puerto 8080 ocupado
+**Al arrancar se puntúan muchos partidos**
 
-Comprueba:
+Detén el backend y asegúrate de que tu `.env` contenga `AUTO_SCORING_ENABLED=false`.
 
-netstat -ano | findstr :8080
+**`Filename too long` al clonar en Windows**
 
-Detén el proceso que esté ocupando el puerto antes de arrancar el backend.
+```powershell
+git config --global core.longpaths true
+```
 
-Google Login devuelve 401
+---
 
-Comprueba que:
+## 17. Seguridad
 
-GOOGLE_CLIENT_ID sea el mismo que usa el frontend;
+Nunca subas al repositorio:
 
-el frontend esté en un origen autorizado de Google;
+- contraseñas de PostgreSQL;
+- `JWT_SECRET`;
+- Google Client Secrets;
+- Google ID Tokens ni JWT emitidos por el backend;
+- volcados de base de datos con datos personales;
+- logs con credenciales.
 
-no se esté usando Client Secret en lugar de Client ID.
+El archivo `.env` está en `.gitignore` y debe permanecer así. Todo lo sensible se configura
+mediante variables de entorno; `application.properties` no contiene ningún secreto.
 
-Al arrancar se puntúan muchos partidos
+---
 
-Detén el backend y asegúrate de que tu `.env` contenga:
+## 18. Estructura del repositorio
 
-AUTO_SCORING_ENABLED=false
+```
+PollaMundialista-Backend/
+├─ .mvn/wrapper/           Configuración del Maven Wrapper
+├─ scripts/                Utilidades de desarrollo del reloj (PowerShell)
+├─ src/
+│  ├─ main/
+│  │  ├─ java/com/mundialpolla/
+│  │  │  ├─ auth/          Validación del ID Token de Google y emisión de JWT
+│  │  │  ├─ dataset/       Importador del Mundial 2026
+│  │  │  ├─ matches/       Partidos
+│  │  │  ├─ me/            Endpoints del participante autenticado
+│  │  │  ├─ participants/  Participantes
+│  │  │  ├─ predictions/   Pronósticos
+│  │  │  ├─ ranking/       Ranking
+│  │  │  ├─ scoring/       Cálculo de puntos
+│  │  │  ├─ shared/        Configuración, seguridad, CORS y reloj
+│  │  │  ├─ stages/ groups/ teams/ tournaments/
+│  │  └─ resources/
+│  │     ├─ db/migration/  Las 7 migraciones de Flyway
+│  │     ├─ datasets/      world-cup-2026.json
+│  │     └─ application.properties
+│  └─ test/
+├─ .env.example            Plantilla de configuración local
+├─ mvnw / mvnw.cmd         Maven Wrapper
+└─ pom.xml
+```
 
-antes de volver a iniciar.
+---
 
-No aparecen partidos / "No hay partidos próximos"
+## 19. Flujo de trabajo diario
 
-Es lo esperado con el reloj en REAL: el dataset del Mundial 2026 va del
-11 de junio al 19 de julio de 2026, fechas ya pasadas, así que no queda
-ningún partido "próximo". Para verlos, ejecuta el simulador (sección 11.1):
+```powershell
+git pull
+.\mvnw.cmd spring-boot:run
+.\scripts\simular-mundial.ps1     # solo si quieres ver los partidos próximos
+```
 
-.\scripts\simular-mundial.ps1
-
-16. Archivos que nunca deben subirse al repositorio
-
-No publiques:
-
-contraseñas PostgreSQL;
-
-JWT_SECRET;
-
-Google ID Tokens;
-
-JWT emitidos por el backend;
-
-Client Secrets;
-
-dumps de base con datos personales;
-
-logs con credenciales.
-
-Usa variables de entorno para secretos.
-
-17. Herramientas opcionales útiles
-
-DBeaver Community — inspección de PostgreSQL.
-
-Postman — opcional; Swagger ya cubre la mayoría de pruebas REST.
-
-Windows Terminal — terminal más cómoda.
-
-VS Code + Extension Pack for Java + Spring Boot Extension Pack.
-
-18. Checklist de instalación completa
-
-Git instalado.
-
-Java 21 instalado.
-
-java -version devuelve 21.
-
-javac -version devuelve 21.
-
-PostgreSQL 17 instalado y en ejecución.
-
-Base polla_mundialista creada.
-
-Repositorio clonado.
-
-DB_PASSWORD configurado.
-
-GOOGLE_CLIENT_ID configurado.
-
-JWT_SECRET generado/configurado.
-
-AUTO_SCORING_ENABLED=false durante desarrollo histórico.
-
-.\mvnw.cmd clean test termina en BUILD SUCCESS.
-
-Backend inicia en puerto 8080.
-
-Swagger abre correctamente.
-
-Dataset importado.
-
-Frontend puede realizar Google Login.
-Variables de entorno: cuáles son compartidas y cuáles son locales
-
-Para ejecutar el Backend, cada desarrollador debe configurar las siguientes variables de entorno.
-
-No todas las variables deben compartirse entre integrantes del equipo.
-
-Variables locales de cada desarrollador
-
-Estas variables dependen del computador de cada persona y no deben compartirse.
-
-DB_URL=jdbc:postgresql://localhost:5432/polla_mundialista
-DB_USERNAME=postgres
-DB_PASSWORD=TU_PASSWORD_LOCAL_DE_POSTGRES
-
-JWT_SECRET=TU_SECRET_BASE64_LOCAL
-
-DB_URL
-
-Por defecto, el proyecto trabaja con:
-
-polla_mundialista
-
-La conexión local esperada es:
-
-DB_URL=jdbc:postgresql://localhost:5432/polla_mundialista
-
-Cada desarrollador debe crear esa base de datos en su propio PostgreSQL local.
-
-La base:
-
-polla_mundialista_test
-
-se reserva para escenarios de prueba aislados y solo se utiliza si DB_URL se cambia explícitamente para apuntar a ella.
-
-DB_USERNAME
-
-En desarrollo local se utiliza normalmente:
-
-DB_USERNAME=postgres
-
-Si algún integrante configuró PostgreSQL con otro usuario, debe reemplazar este valor por el suyo.
-
-DB_PASSWORD
-
-Cada integrante debe usar la contraseña que configuró al instalar PostgreSQL en su computador.
-
-Ejemplo:
-
-DB_PASSWORD=TU_PASSWORD_LOCAL
-
-No pedir ni reutilizar la contraseña de PostgreSQL de otro integrante.
-
-JWT_SECRET
-
-Cada desarrollador genera su propio secreto local en su `.env`.
-
-No es necesario que todos tengan el mismo valor durante desarrollo local.
-
-Es el secreto INTERNO con el que el backend firma sus propios JWT. No tiene
-relación con Google: no es el Client ID ni el Client Secret.
-
-Requisito: Base64 estándar de al menos 32 bytes (ver sección 4.4, que incluye
-el comando de generación para Windows y para macOS/Linux).
-
-No compartir este valor públicamente ni subirlo a GitHub.
-
-Variable compartida por el proyecto
-
-La siguiente variable sí debe ser proporcionada por el responsable del proyecto:
-
-GOOGLE_CLIENT_ID=CLIENT_ID_DEL_PROYECTO
-
-Todos los desarrolladores deben utilizar el mismo GOOGLE_CLIENT_ID configurado para Polla Mundialista 2026.
-
-El GOOGLE_CLIENT_ID no es una contraseña, pero debe mantenerse centralizado para evitar que cada integrante configure un cliente OAuth diferente.
-
-Configuración recomendada para desarrollo
-
-Durante desarrollo y pruebas históricas utilizar:
-
-AUTO_SCORING_ENABLED=false
-
-Esto evita que el scheduler procese automáticamente partidos históricos al iniciar el Backend.
-
-El scoring puede ejecutarse manualmente cuando sea necesario mediante:
-
-POST /api/v1/internal/scoring/run
-
-CORS local
-
-Para trabajar con el Frontend local:
-
-CORS_ALLOWED_ORIGINS=http://localhost:3000
-
-Configuración final esperada
-
-Cada desarrollador debería tener una configuración equivalente a:
-
-DB_URL=jdbc:postgresql://localhost:5432/polla_mundialista
-DB_USERNAME=postgres
-DB_PASSWORD=TU_PASSWORD_LOCAL
-
-GOOGLE_CLIENT_ID=CLIENT_ID_COMPARTIDO_DEL_PROYECTO
-
-JWT_SECRET=TU_SECRET_BASE64_LOCAL
-
-AUTO_SCORING_ENABLED=false
-
-CORS_ALLOWED_ORIGINS=http://localhost:3000
-
-Resumen
-
-Variable
-
-¿Se comparte?
-
-Responsable
-
-DB_URL
-
-No necesariamente
-
-Cada desarrollador
-
-DB_USERNAME
-
-No necesariamente
-
-Cada desarrollador
-
-DB_PASSWORD
-
-No
-
-Cada desarrollador
-
-JWT_SECRET
-
-No
-
-Cada desarrollador
-
-GOOGLE_CLIENT_ID
-
-Sí
-
-Responsable del proyecto
-
-AUTO_SCORING_ENABLED
-
-Valor recomendado común
-
-Equipo
-
-CORS_ALLOWED_ORIGINS
-
-Valor recomendado común
-
-Equipo
-
-Nunca subir a GitHub:
-
-DB_PASSWORD
-JWT_SECRET
-Google Client Secret
-JWT emitidos
-Google ID Tokens
-
-Fuentes oficiales de instalación
-
-Eclipse Temurin / Java: https://adoptium.net/temurin/releases/?version=21
-
-PostgreSQL Windows: https://www.postgresql.org/download/windows/
-
-Git para Windows: https://git-scm.com/install/windows
-
-DBeaver Community: https://dbeaver.io/download/
-
-Visual Studio Code: https://code.visualstudio.com/docs/setup/windows
-
-Java Extension Pack: https://marketplace.visualstudio.com/items?itemName=vscjava.vscode-java-pack
-
-Spring Boot Extension Pack: https://marketplace.visualstudio.com/items?itemName=vmware.vscode-boot-dev-pack
+La configuración vive en `.env`, así que no hay que exportar nada.
