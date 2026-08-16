@@ -338,8 +338,8 @@ GOOGLE_CLIENT_ID=tu_client_id.apps.googleusercontent.com
 
 Para obtener uno propio: Google Cloud Console → *APIs & Services* → *Credentials* → *Create
 credentials* → *OAuth client ID* → tipo **Web application**. El origen desde el que se sirva la
-aplicación cliente debe estar registrado como *Authorized JavaScript origin* de ese cliente;
-en desarrollo local eso es `http://localhost:3000`.
+aplicación cliente debe estar registrado como *Authorized JavaScript origin* de ese cliente.
+Esa configuración se hace en Google Cloud, no en este backend.
 
 El Client ID es un valor **público**: viaja al navegador y no es un secreto.
 
@@ -563,7 +563,19 @@ ninguno está en el futuro respecto al reloj.
 
 ### 12.4 Activar el reloj histórico (Windows)
 
-Con el backend arrancado:
+Los scripts del reloj están en la carpeta `scripts/` de este repositorio:
+
+```
+PollaMundialista-Backend/
+└─ scripts/
+   ├─ simular-mundial.ps1        Activa HISTORICAL_REPLAY
+   └─ restaurar-tiempo-real.ps1  Vuelve a REAL
+```
+
+Ambos son de PowerShell y solo llaman a endpoints que ya existen en el backend: no modifican
+código, ni base de datos, ni las fechas de los partidos.
+
+Ejecútalos desde la raíz del backend, con el backend ya arrancado en otra terminal:
 
 ```powershell
 .\scripts\simular-mundial.ps1
@@ -870,3 +882,17 @@ git pull
 ```
 
 La configuración vive en `.env`, así que no hay que exportar nada.
+
+---
+
+## 20. Autores
+
+Proyecto desarrollado por:
+
+- **Manuel José Gómez Laiton** 
+- **Valentina Mancilla** 
+- **Thomas**
+- **sara**
+- **luis**
+
+Polla Mundialista 2026, proyecto universitario desarrollado en el marco de Globant.
