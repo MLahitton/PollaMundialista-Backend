@@ -6,11 +6,13 @@ Polla Mundialista es una aplicación para competir pronosticando los partidos de
 
 Este repositorio contiene **únicamente el backend**: la API que guarda y calcula toda la información del juego. Se encarga de:
 
-- **Usuarios y autenticación** — valida el inicio de sesión con Google y entrega una sesión propia.
-- **Torneo, equipos y partidos** — el Mundial 2026 completo: 48 selecciones y 104 partidos.
-- **Pronósticos** — guarda los marcadores que predice cada participante y controla hasta cuándo se pueden editar.
-- **Puntos** — calcula los aciertos de cada participante.
-- **Ranking** — arma la tabla del torneo.
+- Manejar los **partidos** del Mundial.
+- Recibir y guardar los **pronósticos** de cada persona.
+- Manejar los **participantes** y su inicio de sesión.
+- **Calcular los puntos** de cada pronóstico.
+- Generar el **ranking** del torneo.
+- Controlar la **lógica del Mundial** (cuándo abre y cierra cada partido).
+- Entregar la **API** que utiliza el frontend.
 
 El frontend no calcula nada por su cuenta: consume esta API. Por eso el backend debe estar encendido para que la aplicación funcione.
 
@@ -34,10 +36,11 @@ Ofrecer la API que sostiene la Polla Mundialista: autenticar a los participantes
 - Carga de todos los datos del Mundial con un solo comando.
 - Pronósticos con cierre automático 15 minutos antes de cada partido.
 - Cálculo de puntos: marcador exacto, resultado correcto y bonus por equipo clasificado.
+- Puntuación manual (cuando tú la ejecutas) o automática (el backend la ejecuta solo).
 - Ranking del torneo con Top 10 y posición del participante.
-- Reloj configurable (real o histórico) para poder probar el Mundial aunque sus fechas ya hayan pasado.
+- Reloj configurable (real o histórico) para simular el Mundial aunque sus fechas ya hayan pasado.
 - Creación automática de las tablas de la base de datos al arrancar.
-- Documentación interactiva de la API con Swagger.
+- API REST documentada con Swagger.
 
 ---
 
@@ -47,16 +50,68 @@ Ofrecer la API que sostiene la Polla Mundialista: autenticar a los participantes
 |---|---|
 | Java 21 | Lenguaje de desarrollo |
 | Spring Boot 4.1 | Framework del backend |
-| Maven Wrapper | Ejecución y dependencias |
+| Maven Wrapper | Ejecución y dependencias (ya viene incluido) |
 | PostgreSQL 17 | Base de datos |
 | Flyway | Creación automática de las tablas |
+| Spring Data JPA | Acceso a la base de datos |
 | Spring Security | Seguridad y protección de la API |
 | Google Identity | Inicio de sesión con Google |
 | Swagger / OpenAPI | Documentación de la API |
+| JUnit | Pruebas |
 
 ---
 
-## 5. Instalación y Configuración
+## 5. Estructura del Proyecto
+
+```
+PollaMundialista-Backend/
+├─ scripts/                    Scripts del reloj (Windows)
+├─ src/
+│  ├─ main/
+│  │  ├─ java/com/mundialpolla/
+│  │  │  ├─ auth/              Inicio de sesión con Google y sesión propia
+│  │  │  ├─ dataset/           Carga de los datos del Mundial
+│  │  │  ├─ groups/            Grupos del torneo
+│  │  │  ├─ matches/           Partidos
+│  │  │  ├─ me/                Datos del usuario que inició sesión
+│  │  │  ├─ participants/      Participantes
+│  │  │  ├─ predictions/       Pronósticos
+│  │  │  ├─ ranking/           Ranking
+│  │  │  ├─ scoring/           Cálculo de puntos
+│  │  │  ├─ shared/            Configuración, seguridad y reloj
+│  │  │  ├─ stages/            Fases del torneo
+│  │  │  ├─ teams/             Equipos
+│  │  │  └─ tournaments/       Torneos
+│  │  └─ resources/
+│  │     ├─ db/migration/      Migraciones que crean las tablas
+│  │     ├─ datasets/          Calendario del Mundial 2026
+│  │     └─ application.properties
+│  └─ test/                    Pruebas del proyecto
+├─ .env.example                Plantilla de configuración local
+├─ mvnw / mvnw.cmd             Maven incluido en el proyecto
+└─ pom.xml                     Dependencias
+```
+
+Los archivos que conviene conocer al empezar:
+
+| Archivo | Para qué sirve |
+|---|---|
+| `pom.xml` | Versión de Java y dependencias del proyecto |
+| `.env.example` | Plantilla de las variables necesarias para ejecutar el proyecto |
+| `mvnw` / `mvnw.cmd` | Maven incluido: sirve para arrancar el backend sin instalar nada más |
+| `src/main/resources/application.properties` | Configuración general (puerto, base de datos, Swagger) |
+| `src/main/resources/db/migration/` | Archivos que crean las tablas automáticamente |
+| `src/main/resources/datasets/world-cup-2026.json` | Calendario completo del Mundial 2026 |
+| `scripts/simular-mundial.ps1` | Activa el reloj de simulación (Windows) |
+| `scripts/restaurar-tiempo-real.ps1` | Vuelve al reloj real (Windows) |
+
+---
+
+## 6. Instalación y Configuración
+
+Esto es lo que vas a hacer, en orden:
+
+**Instalar → Descargar → Crear la base de datos → Configurar `.env` → Ejecutar → Cargar los datos → Activar el reloj → Verificar.**
 
 ### Paso 1 — Instalar lo necesario
 
@@ -128,13 +183,13 @@ Solo tienes que crear una base de datos **vacía**. Las tablas se crean solas la
 psql -U postgres -c "CREATE DATABASE polla_mundialista;"
 ```
 
-También puedes crearla desde DBeaver: clic derecho en *Databases* → *Create New Database* → nombre `polla_mundialista`.
+También puedes crearla desde DBeaver o pgAdmin: clic derecho en *Databases* → *Create New Database* → nombre `polla_mundialista`.
 
 > **No crees tablas a mano.** El proyecto usa Flyway, que crea las 9 tablas automáticamente al arrancar.
 
 ---
 
-### Paso 4 — Configurar las variables de entorno
+### Paso 4 — Configurar el archivo `.env`
 
 El proyecto ya trae el archivo `.env.example` con las variables que necesita. **No las crees desde cero: copia ese archivo.**
 
@@ -185,12 +240,14 @@ El resto de variables ya vienen configuradas y **no necesitas tocarlas**:
 |---|---|
 | `GOOGLE_CLIENT_ID` | Identifica la aplicación ante Google. Ya viene con el valor del proyecto |
 | `DB_URL` y `DB_USERNAME` | Conexión a PostgreSQL. Cámbialas solo si no usas los valores por defecto |
-| `CORS_ALLOWED_ORIGINS` | Direcciones desde las que el backend acepta peticiones |
-| `AUTO_SCORING_ENABLED` | Ya viene en `false`, que es lo recomendado para desarrollo |
+| `CORS_ALLOWED_ORIGINS` | Direcciones desde las que el backend acepta peticiones (por defecto `http://localhost:3000`) |
+| `AUTO_SCORING_ENABLED` | Ya viene en `false`, que es lo recomendado para desarrollo (ver sección 9) |
 
 > **Importante:** `.env` no se sube a GitHub (está en `.gitignore`). Nunca compartas tu `JWT_SECRET` ni tu contraseña de PostgreSQL.
 
 > **No confundas estas tres cosas:** el **Google Client ID** identifica la aplicación ante Google y ya viene configurado. El **Google Client Secret** es otra cosa distinta y **este backend no lo usa nunca**. El **JWT_SECRET** es la clave interna del backend, no tiene nada que ver con Google.
+
+> Si dejas una variable escrita pero vacía (por ejemplo `DB_URL=`), el backend puede no arrancar. Si no la necesitas, déjala comentada con `#`.
 
 ---
 
@@ -289,7 +346,7 @@ curl -X POST http://localhost:8080/api/v1/internal/clock/historical \
 
 Listo: los 104 partidos aparecerán como próximos y podrás pronosticarlos.
 
-> **Al reiniciar el backend, el reloj vuelve al modo real** y la lista volverá a estar vacía. No se pierde ningún dato: solo tienes que volver a ejecutar este paso. Más detalles en la sección 7.
+> **Al reiniciar el backend, el reloj vuelve al modo real** y la lista volverá a estar vacía. No se pierde ningún dato: solo tienes que volver a ejecutar este paso. Más detalles en la sección 8.
 
 ---
 
@@ -303,12 +360,13 @@ Comprueba estas direcciones en el navegador o con `curl`:
 | Documentación de la API | http://localhost:8080/swagger-ui.html | La página de Swagger |
 | El torneo se cargó | http://localhost:8080/api/v1/tournaments/active | *World Cup 2026* |
 | Los partidos se cargaron | http://localhost:8080/api/v1/matches | Los 104 partidos |
+| El reloj está simulando | http://localhost:8080/api/v1/internal/clock | `"mode":"HISTORICAL_REPLAY"` |
 
 Si todo eso responde correctamente, la instalación está lista.
 
 ---
 
-## 6. Comandos disponibles
+## 7. Comandos disponibles
 
 Desde la carpeta del proyecto. En Windows usa `.\mvnw.cmd`; en macOS / Linux, `./mvnw`.
 
@@ -317,29 +375,28 @@ Desde la carpeta del proyecto. En Windows usa `.\mvnw.cmd`; en macOS / Linux, `.
 | `.\mvnw.cmd spring-boot:run` | Ejecuta el backend (puerto 8080) |
 | `.\mvnw.cmd clean test` | Compila y ejecuta las pruebas |
 | `.\mvnw.cmd clean package` | Genera el archivo `.jar` |
-| `.\scripts\simular-mundial.ps1` | Activa el reloj histórico (Windows) |
+| `.\scripts\simular-mundial.ps1` | Activa el reloj de simulación (Windows) |
 | `.\scripts\restaurar-tiempo-real.ps1` | Vuelve al reloj real (Windows) |
 
 > `clean test` no solo descarga dependencias: enciende la aplicación completa para probarla. Necesita PostgreSQL encendido, la base de datos creada y el `.env` ya configurado.
 
 ---
 
-## 7. El reloj del backend
+## 8. El reloj del Mundial
 
 El backend tiene un reloj con dos modos:
 
 - **REAL** — usa la fecha y hora actuales. Es el modo normal, y el que se activa siempre al arrancar.
-- **HISTORICAL_REPLAY** — simula que estamos en una fecha del pasado, para poder probar el Mundial.
+- **HISTORICAL_REPLAY** — simula que estamos en una fecha del Mundial, para poder probar el torneo.
 
-Sirve para resolver un problema práctico: como el Mundial 2026 ya terminó respecto a la fecha real, sin simulación no aparecería ningún partido próximo.
+Sirve para resolver un problema práctico: como las fechas del Mundial 2026 ya pasaron, sin simulación no aparecería ningún partido próximo.
 
-Los scripts están en la carpeta `scripts/` del proyecto:
+El reloj decide qué partidos ya se jugaron y cuáles no. Es la pieza que mueve toda la simulación:
 
-```
-scripts/
-├─ simular-mundial.ps1        Activa el modo histórico
-└─ restaurar-tiempo-real.ps1  Vuelve al modo real
-```
+- Si el reloj está **antes** de un partido, ese partido está por jugarse y se puede pronosticar.
+- Si el reloj está **después** de un partido, ese partido ya terminó y puede generar puntos.
+
+### Cómo controlarlo
 
 | Acción | Windows | macOS / Linux |
 |---|---|---|
@@ -347,55 +404,130 @@ scripts/
 | Simular el Mundial | `.\scripts\simular-mundial.ps1` | `curl -X POST .../clock/historical` con el instante en el cuerpo |
 | Volver al modo real | `.\scripts\restaurar-tiempo-real.ps1` | `curl -X POST .../clock/real` |
 
+Por defecto la simulación se sitúa en **2026-06-10**, un día antes del primer partido. Para avanzar a otra fecha del Mundial, indica el instante que quieras.
+
+En Windows:
+
+```powershell
+.\scripts\simular-mundial.ps1 -Instant "2026-06-20T12:00:00Z"
+```
+
+En macOS / Linux:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/internal/clock/historical \
+  -H "Content-Type: application/json" \
+  -d '{"instant":"2026-06-20T12:00:00Z"}'
+```
+
 **Qué pasa al reiniciar el backend:** el modo del reloj vuelve siempre a **REAL**. Los datos no se borran y los 104 partidos siguen ahí; lo único que cambia es el reloj. Si quieres seguir viendo los partidos, vuelve a ejecutar la simulación.
 
 ---
 
-## 8. Problemas frecuentes
+## 9. Cómo hacer que el ranking funcione
+
+El ranking muestra a los participantes que **ya tienen partidos puntuados**. Si nadie tiene puntos todavía, aparece vacío.
+
+Para que el ranking se llene hacen falta tres cosas, en este orden:
+
+1. **Que haya pronósticos guardados.** Alguien tiene que haber pronosticado desde el frontend, con el reloj antes del partido.
+2. **Que el reloj esté después de esos partidos.** Solo los partidos ya terminados pueden generar puntos.
+3. **Que se ejecute la puntuación (scoring).** Es el paso que convierte los pronósticos en puntos.
+
+### Paso a paso durante una simulación
+
+**1) Sitúa el reloj antes del Mundial y guarda pronósticos**
+
+```powershell
+.\scripts\simular-mundial.ps1
+```
+
+Entra al frontend en `http://localhost:3000` y guarda algunos pronósticos.
+
+**2) Avanza el reloj a una fecha en la que ya se hayan jugado partidos**
+
+```powershell
+.\scripts\simular-mundial.ps1 -Instant "2026-06-20T12:00:00Z"
+```
+
+**3) Ejecuta la puntuación**
+
+En PowerShell (Windows):
+
+```powershell
+Invoke-RestMethod -Method POST -Uri "http://localhost:8080/api/v1/internal/scoring/run"
+```
+
+En macOS / Linux:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/internal/scoring/run
+```
+
+Responde con cuántos partidos encontró y cuántos procesó:
+
+```json
+{
+  "asOf": "2026-06-20T12:00:00Z",
+  "candidates": 32,
+  "processed": 32,
+  "failed": 0
+}
+```
+
+**4) Mira el ranking**
+
+En el frontend, entra a `http://localhost:3000/ranking`. También puedes consultarlo directamente: primero pide el torneo activo en `http://localhost:8080/api/v1/tournaments/active`, copia su `id` y abre:
+
+```
+http://localhost:8080/api/v1/rankings/tournaments/EL_ID_DEL_TORNEO
+```
+
+Repite los pasos 2 y 3 cada vez que quieras avanzar en el Mundial: el ranking se irá llenando a medida que avancen los partidos y se ejecute el scoring.
+
+### Puntuación manual o automática
+
+| Valor en `.env` | Qué pasa |
+|---|---|
+| `AUTO_SCORING_ENABLED=false` | Tú decides cuándo puntuar, con `POST /api/v1/internal/scoring/run`. **Es lo recomendado para desarrollo** y es como viene el `.env.example` |
+| `AUTO_SCORING_ENABLED=true` | El backend puntúa solo cada minuto, sin que tengas que pedirlo |
+
+> Se recomienda `false` en desarrollo para que no se puntúen de golpe todos los partidos al arrancar, y para que puedas controlar el ritmo de la simulación.
+
+### Si el ranking aparece vacío
+
+Revisa esto en orden:
+
+1. **¿El backend está encendido?** Comprueba `http://localhost:8080/actuator/health`.
+2. **¿Hay datos del Mundial?** Si no hay partidos, ejecuta el Paso 6 de la instalación.
+3. **¿Hay pronósticos guardados?** Sin pronósticos no hay puntos que calcular.
+4. **¿El reloj está después de algún partido?** Con el reloj antes del inicio del Mundial es **normal** que el ranking esté vacío: todavía no ha terminado ningún partido.
+5. **¿Ejecutaste el scoring?** Lanza `POST /api/v1/internal/scoring/run` y revisa que `processed` sea mayor que cero.
+
+---
+
+## 10. Problemas frecuentes
 
 | Problema | Solución |
 |---|---|
 | La lista de próximos partidos viene vacía | Es normal con el reloj en modo real. Ejecuta el Paso 7 |
 | No aparece ningún equipo ni partido | Falta cargar los datos del Mundial. Ejecuta el Paso 6 |
+| El ranking aparece vacío | Comprueba que el reloj esté después de algún partido y que hayas ejecutado el scoring. Ver sección 9 |
+| El scoring responde `processed: 0` | El reloj todavía está antes de los partidos, o esos partidos ya estaban puntuados |
 | `Port 8080 was already in use` | Ya tienes otro backend encendido. Ciérralo con `Ctrl + C` antes de arrancar de nuevo |
 | `JWT_SECRET must be a valid Base64 secret...` | El `JWT_SECRET` no es válido. Genéralo con el comando del Paso 4, sin escribirlo a mano |
 | `GOOGLE_CLIENT_ID must be configured` | Dejaste esa variable vacía en el `.env`. Coméntala con `#` para usar el valor del proyecto |
 | Error de conexión con PostgreSQL | Comprueba que PostgreSQL esté encendido, que exista la base `polla_mundialista` y que `DB_PASSWORD` sea correcta |
 | `java -version` no muestra 21 | Instala Java 21 y reinicia la terminal. En Windows revisa además `JAVA_HOME` |
 | El login falla con error 401 | El Client ID de Google del backend y el del frontend deben ser el mismo |
+| El frontend no carga datos | El backend debe estar en `http://localhost:8080` y el frontend en `http://localhost:3000` |
 | `Filename too long` al clonar en Windows | Ejecuta `git config --global core.longpaths true` y vuelve a clonar |
 
 > Después de cambiar el archivo `.env`, detén el backend con `Ctrl + C` y vuelve a arrancarlo.
 
 ---
 
-## 9. Estructura del proyecto
-
-```
-PollaMundialista-Backend/
-├─ scripts/                    Scripts del reloj (Windows)
-├─ src/main/java/com/mundialpolla/
-│  ├─ auth/                    Inicio de sesión con Google y sesión propia
-│  ├─ dataset/                 Carga de los datos del Mundial
-│  ├─ matches/                 Partidos
-│  ├─ me/                      Datos del usuario que inició sesión
-│  ├─ participants/            Participantes
-│  ├─ predictions/             Pronósticos
-│  ├─ ranking/                 Ranking
-│  ├─ scoring/                 Cálculo de puntos
-│  └─ shared/                  Configuración, seguridad y reloj
-├─ src/main/resources/
-│  ├─ db/migration/            Migraciones que crean las tablas
-│  ├─ datasets/                Calendario del Mundial 2026
-│  └─ application.properties   Configuración general
-├─ .env.example                Plantilla de configuración local
-├─ mvnw / mvnw.cmd             Maven incluido en el proyecto
-└─ pom.xml                     Dependencias
-```
-
----
-
-## 10. Autores
+## 11. Autores
 
 Proyecto desarrollado por:
 
